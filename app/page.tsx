@@ -2,8 +2,10 @@
 
 import type React from "react"
 
+import OpenAI from "openai"
 import { useState, useRef, useEffect } from "react"
 import { Send } from "lucide-react"
+import Markdown from "react-markdown"
 
 export default function ChatUI() {
   const [messages, setMessages] = useState([
@@ -13,13 +15,42 @@ export default function ChatUI() {
   ])
   const [inputValue, setInputValue] = useState("")
 
+  useEffect(() => {
+    const fetchData = async () => {
+      const response = await fetch("http://localhost:8765/", {mode: "cors"})
+      const data = await response.json()
+      console.log(data)
+    }
+
+    fetchData()
+  }, [])
+
+  const deepseek = new OpenAI({
+    baseURL: "https://api.deepseek.com/v1",
+    apiKey: process.env.DEEPSEEK_API_KEY,
+    dangerouslyAllowBrowser: true
+  })
+
+
+  async function getResponse(message: string) {
+    const completion = await deepseek.chat.completions.create({
+      model: "deepseek-chat",
+      messages: [{ role: "user", content: message }],
+    })
+    return completion.choices[0].message.content
+  }
+  
   const chatWindowRef = useRef(null)
   const textareaRef = useRef(null)
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async(e: React.FormEvent) => {
     e.preventDefault()
     if (inputValue.trim()) {
       setMessages([...messages, { id: Date.now(), text: inputValue, sender: "user" }])
       setInputValue("")
+      const response = await getResponse(inputValue)
+      if (response) {
+        setMessages([...messages, { id: Date.now(), text: response, sender: "bot" }])
+      }
     }
   }
 
@@ -49,16 +80,21 @@ export default function ChatUI() {
         {/* Chat messages area */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={chatWindowRef}>
           {messages.map((message) => (
+
             <div key={message.id} className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"} whitespace-pre-wrap`}>
-              <div
-                className={`max-w-[70%] p-3 rounded-lg break-words ${
-                  message.sender === "user"
-                    ? "bg-blue-500 text-white rounded-br-none"
-                    : "bg-gray-200 text-gray-800 rounded-bl-none"
-                }`}
-              >
-                {message.text}
-              </div>
+              {message.sender === "user" ? (
+                <div
+                  className={`max-w-[70%] p-3 rounded-lg break-words bg-blue-500 text-white rounded-br-none`}
+                >
+                  {message.text}
+                </div>
+              ) : (
+                <div
+                  className={`p-3 break-words text-gray-800 rounded-bl-none`}
+                >
+                  <Markdown>{message.text}</Markdown>
+                </div>
+              )}
             </div>
           ))}
         </div>
